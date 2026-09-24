@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using WebAPI.CustomActionFilters;
 using WebAPI.Models.DTO;
 using WebAPI.Repositories;
 
@@ -35,8 +36,14 @@ namespace WebAPI.Controllers
         }
 
         [HttpPost("add-book")]
+        [ValidateModel]
         public IActionResult AddBook([FromBody] AddBookRequestDTO addBookRequestDTO)
         {
+            if (!ValidateAddBook(addBookRequestDTO))
+            {
+                return BadRequest(ModelState);
+            }
+
             var bookAdd = _bookRepository.AddBook(addBookRequestDTO);
             return Ok(bookAdd);
         }
@@ -62,5 +69,33 @@ namespace WebAPI.Controllers
             }
             return Ok(deleteBook);
         }
+
+        #region Private methods
+        private bool ValidateAddBook(AddBookRequestDTO addBookRequestDTO)
+        {
+            if (addBookRequestDTO == null)
+            {
+                ModelState.AddModelError(nameof(addBookRequestDTO), "Please add book data");
+                return false;
+            }
+
+            if (string.IsNullOrEmpty(addBookRequestDTO.Description))
+            {
+                ModelState.AddModelError(nameof(addBookRequestDTO.Description), $"{nameof(addBookRequestDTO.Description)} cannot be null");
+            }
+
+            if (addBookRequestDTO.Rate.HasValue && (addBookRequestDTO.Rate < 0 || addBookRequestDTO.Rate > 5))
+            {
+                ModelState.AddModelError(nameof(addBookRequestDTO.Rate), $"{nameof(addBookRequestDTO.Rate)} cannot be less than 0 and more than 5");
+            }
+
+            if (ModelState.ErrorCount > 0)
+            {
+                return false;
+            }
+
+            return true;
+        }
+        #endregion
     }
 }
