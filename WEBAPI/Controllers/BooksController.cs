@@ -65,7 +65,7 @@ namespace WebAPI.Controllers
             var deleteBook = _bookRepository.DeleteBookById(id);
             if (deleteBook == null)
             {
-                return NotFound(new { message = "Không tìm thấy sách để xóa" });
+                return NotFound(new { message = "Không tìm thấyy sách để xóa" });
             }
             return Ok(deleteBook);
         }
