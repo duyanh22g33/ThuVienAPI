@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc;
 using WebAPI.Models.DTO;
 using WebAPI.Repositories;
 
@@ -6,60 +7,74 @@ namespace WebAPI.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    public class AuthorsController : ControllerBase
+    public class AuthController : ControllerBase
     {
-        private readonly IAuthorRepository _authorRepository;
+        private readonly UserManager<IdentityUser> _userManager;
+        private readonly ITokenRepository _tokenRepository;
 
-        public AuthorsController(IAuthorRepository authorRepository)
+        public AuthController(UserManager<IdentityUser> userManager, ITokenRepository tokenRepository)
         {
-            _authorRepository = authorRepository;
+            _userManager = userManager;
+            _tokenRepository = tokenRepository;
         }
 
-        [HttpGet("get-all-author")]
-        public IActionResult GetAllAuthor()
+        [HttpPost]
+        [Route("Register")]
+        public async Task<IActionResult> Register([FromBody] RegisterRequestDTO registerRequestDTO)
         {
-            var allAuthors = _authorRepository.GellAllAuthors();
-            return Ok(allAuthors);
-        }
-
-        [HttpGet("get-author-by-id/{id}")]
-        public IActionResult GetAuthorById(int id)
-        {
-            var authorWithId = _authorRepository.GetAuthorById(id);
-            if (authorWithId == null)
+            var identityUser = new IdentityUser
             {
-                return NotFound(new { message = "Không tìm thấy tác giả" });
-            }
-            return Ok(authorWithId);
-        }
+                UserName = registerRequestDTO.Username,
+                Email = registerRequestDTO.Username
+            };
 
-        [HttpPost("add-author")]
-        public IActionResult AddAuthors([FromBody] AddAuthorRequestDTO addAuthorRequestDTO)
-        {
-            var authorAdd = _authorRepository.AddAuthor(addAuthorRequestDTO);
-            return Ok(authorAdd);
-        }
+            var identityResult = await _userManager.CreateAsync(identityUser, registerRequestDTO.Password);
 
-        [HttpPut("update-author-by-id/{id}")]
-        public IActionResult UpdateAuthorById(int id, [FromBody] AuthorNoIdDTO authorDTO)
-        {
-            var authorUpdate = _authorRepository.UpdateAuthorById(id, authorDTO);
-            if (authorUpdate == null)
+            if (identityResult.Succeeded)
             {
-                return NotFound(new { message = "Không tìm thấy tác giả để cập nhật" });
+                if (registerRequestDTO.Roles != null && registerRequestDTO.Roles.Any())
+                {
+                    identityResult = await _userManager.AddToRolesAsync(identityUser, registerRequestDTO.Roles);
+                }
+
+                if (identityResult.Succeeded)
+                {
+                    return Ok("Register Successful! Let login!");
+                }
             }
-            return Ok(authorUpdate);
+
+            return BadRequest("Something wrong!");
         }
 
-        [HttpDelete("delete-author-by-id/{id}")]
-        public IActionResult DeleteAuthorById(int id)
+        [HttpPost]
+        [Route("Login")]
+        public async Task<IActionResult> Login([FromBody] LoginRequestDTO loginRequestDTO)
         {
-            var authorDelete = _authorRepository.DeleteAuthorById(id);
-            if (authorDelete == null)
+            var user = await _userManager.FindByEmailAsync(loginRequestDTO.Username);
+
+            if (user != null)
             {
-                return NotFound(new { message = "Không tìm thấy tác giả để xóa" });
+                var checkPasswordResult = await _userManager.CheckPasswordAsync(user, loginRequestDTO.Password);
+
+                if (checkPasswordResult)
+                {
+                    var roles = await _userManager.GetRolesAsync(user);
+
+                    if (roles != null)
+                    {
+                        var jwtToken = _tokenRepository.CreateJWTToken(user, roles.ToList());
+
+                        var response = new LoginResponseDTO
+                        {
+                            JwtToken = jwtToken
+                        };
+
+                        return Ok(response);
+                    }
+                }
             }
-            return Ok(authorDelete);
+
+            return BadRequest("Username or password incorrect");
         }
     }
 }
